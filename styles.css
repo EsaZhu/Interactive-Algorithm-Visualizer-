@@ -1,0 +1,48 @@
+/*style settings of the entire page*/
+body {
+    background-color:white;
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 20px;
+}
+/*Buttons section at the top of the page*/
+.input-section{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+}
+
+.helper-text{
+    margin-top: 10px;
+    margin-bottom: 20px;
+    font-size: 13px;
+    color: #666;
+}
+
+/*Tree*/
+.tree-container{
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: 50px;
+}
+
+/*Tree nodes*/
+.tree-node{
+    background-color: lightgrey;
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    font-weight: bold;
+    border: 2px solid transparent;
+    transition: border-color 0.3s ease;
+}
+
+.tree-node:hover{
+    border-color: #3CC;
+}

@@ -10,20 +10,23 @@
 <!-- Input Section -->
 <div class="input-section">
     <!-- Your input field and buttons go here -->
-    <button>Enter an array of numbers</button>
     <label>
-        <input type="text" placeholder="">
+        <input type="text" placeholder="Enter an array of numbers*">
     </label>
-    <button>MIN HEAP sort</button>
-    <button>MAX HEAP sort</button>
+
+    <button class="heap-btn">MIN HEAP sort</button>
+    <button class="heap-btn">MAX HEAP sort</button>
 </div>
 
+<div class="helper-text">
+    *Separate the values with<br>
+    commas. BFS Traversal.<br>
+    e.g. 1, 2, 3, 4
+</div>
 <!-- Tree Container -->
 <div class="tree-container">
     <!-- This is where your tree nodes will be dynamically added -->
-    <div class="tree-node">
-        <button style="background-color: lightgrey; width: 60px; height: 60px; border-radius: 50%; display: block; margin: 0 auto;">Root</button>
-    </div>
+    <div class="tree-node" id="root-node"></div>
 </div>
 
 <script src="script.js"></script>
