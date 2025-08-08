@@ -22,10 +22,10 @@ body {
 
 /*Tree*/
 .tree-container{
-    display: flex;
-    justify-content: center;
-    align-items: center;
     margin-top: 50px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 /*Tree nodes*/
@@ -43,6 +43,20 @@ body {
     transition: border-color 0.3s ease;
 }
 
-.tree-node:hover{
-    border-color: #3CC;
+.tree-level{
+    display:flex;
+    justify-content: center;
+    gap: 80px; /*Horizontal space between same level nodes*/
+    margin: 40px 0; /*Vertical space between nodes*/
 }
+
+/*Preview Nodes (dotted circles)*/
+.tree-node.preview{
+    background-color: white;
+    border: 2px dotted #ccc;
+    cursor: pointer;
+}
+
+.tree-node:hover{
+     border-color: #3CC;
+ }
