@@ -1,15 +1,32 @@
 // Track tree state
-let nodeExists = [false, false, false, false, false, false, false]; // Index 0 = root, etc.
+let nodeExists = new Array(15).fill(false); // Index 0 = root, etc.
 let showingPreview = false;
+
+// Helper function to calculate node level
+function getNodeLevel(index) {
+    if (index === 0) return 0; // Root is level 0
+    return Math.floor(Math.log2(index + 1));
+}
+
+// Helper function to get parent index
+function getParentIndex(index) {
+    if (index === 0) return null; // Root has no parent
+    return Math.floor((index - 1) / 2);
+}
+
+// Helper function to get all nodes on a level
+function getNodesOnLevel(level) {
+    const startIndex = Math.pow(2, level) - 1;
+    const endIndex = Math.pow(2, level + 1) - 2;
+    return { startIndex, endIndex };
+}
 
 const inputField = document.querySelector('input[type="text"]');
 const rootNode = document.getElementById('node-0');
 
 rootNode.addEventListener('click', function(e) {
     e.stopPropagation();
-
     console.log('Root node clicked!');
-
     if (!showingPreview) {
         showChildOptions(0);
     } else {
@@ -18,32 +35,53 @@ rootNode.addEventListener('click', function(e) {
 });
 
 function showChildOptions(parentIndex) {
-    // For root node (index 0), children are at indices 1 and 2
     const leftChildIndex = (parentIndex * 2) + 1;
     const rightChildIndex = (parentIndex * 2) + 2;
 
-    // Create level 1 if it doesn't exist
-    let level1 = document.getElementById('level-1');
-    if (!level1) {
-        level1 = document.createElement('div');
-        level1.className = 'tree-level';
-        level1.id = 'level-1';
-        document.querySelector('.tree-container').appendChild(level1);
+    // Check if we're exceeding our array bounds
+    if (leftChildIndex >= nodeExists.length) {
+        console.log("Tree is at maximum size");
+        return;
     }
 
-    // Create left child preview
+    const childLevel = getNodeLevel(leftChildIndex);
+
+    // Create or get the level element
+    let levelElement = document.getElementById(`level-${childLevel}`);
+    if (!levelElement) {
+        levelElement = document.createElement('div');
+        levelElement.className = 'tree-level';
+        levelElement.id = `level-${childLevel}`;
+
+        // Insert in correct order (levels should be in order)
+        const container = document.querySelector('.tree-container');
+        const existingLevels = container.querySelectorAll('.tree-level');
+        let inserted = false;
+
+        existingLevels.forEach(level => {
+            const levelNum = parseInt(level.id.split('-')[1]);
+            if (childLevel < levelNum && !inserted) {
+                container.insertBefore(levelElement, level);
+                inserted = true;
+            }
+        });
+
+        if (!inserted) {
+            container.appendChild(levelElement);
+        }
+    }
+
+    // Add preview nodes
     if (!nodeExists[leftChildIndex]) {
-        createPreviewNode(leftChildIndex, level1);
+        createPreviewNode(leftChildIndex, levelElement, 'left');
     }
 
-    // Create right child preview
-    if (!nodeExists[rightChildIndex]) {
-        createPreviewNode(rightChildIndex, level1);
+    if (rightChildIndex < nodeExists.length && !nodeExists[rightChildIndex]) {
+        createPreviewNode(rightChildIndex, levelElement, 'right');
     }
 
     showingPreview = true;
 }
-
 
 function createPreviewNode(index, parentLevel, position) {
     const previewNode = document.createElement('div');
@@ -63,7 +101,13 @@ function createPreviewNode(index, parentLevel, position) {
 function createActualNode(index, position) {
     // Find the preview node
     const previewNode = document.getElementById(`preview-${index}`);
-    const level1 = document.getElementById('level-1');
+    const childLevel = getNodeLevel(index);
+    const levelElement = document.getElementById(`level-${childLevel}`);
+
+    if (!levelElement) {
+        console.error(`Level element level-${childLevel} not found`);
+        return;
+    }
 
     // Create actual node
     const actualNode = document.createElement('div');
@@ -72,71 +116,91 @@ function createActualNode(index, position) {
     actualNode.setAttribute('data-position', position);
 
     // Insert actual node in the correct position
-    if (previewNode && previewNode.parentNode === level1) {
-        // If preview node exists and is a child of level1, replace it in its exact position
-        level1.insertBefore(actualNode, previewNode.nextSibling);
+    if (previewNode && previewNode.parentNode === levelElement) {
+        // If preview node exists and is a child of the correct level, replace it
+        levelElement.insertBefore(actualNode, previewNode.nextSibling);
         previewNode.remove(); // Remove the preview node after inserting actualNode
     } else {
-        // If no preview node or it's not in level1, use the original positioning logic
-        if (position === 'left') {
-            level1.insertAdjacentElement('afterbegin', actualNode);
+        // If no preview node, position relative to parent node
+        const parentIndex = getParentIndex(index);
+        const parentNode = parentIndex !== null ? document.getElementById(`node-${parentIndex}`) : null;
+
+        if (parentNode && levelElement) {
+            // Find all nodes in the current level
+            const siblingNodes = Array.from(levelElement.querySelectorAll('.tree-node:not(.preview)'))
+                .filter(node => node.id.startsWith('node-'))
+                .map(node => parseInt(node.id.split('-')[1]));
+
+            // Determine insertion point
+            const leftChildIndex = parentIndex * 2 + 1;
+            const rightChildIndex = parentIndex * 2 + 2;
+
+            if (position === 'left') {
+                // Insert as first child of parent (before right child if it exists)
+                const rightChildNode = rightChildIndex < nodeExists.length ? document.getElementById(`node-${rightChildIndex}`) : null;
+                if (rightChildNode) {
+                    levelElement.insertBefore(actualNode, rightChildNode);
+                } else {
+                    levelElement.appendChild(actualNode);
+                }
+            } else {
+                // Insert as last child of parent
+                levelElement.appendChild(actualNode);
+            }
         } else {
-            level1.appendChild(actualNode);
+            // Fallback: append to level
+            levelElement.appendChild(actualNode);
         }
     }
 
+    // Add click event to actual node
     actualNode.addEventListener('click', function(e) {
         e.stopPropagation();
         console.log(`Node ${index} clicked!`);
-        // TODO: Add child creation logic here later
+        if (!showingPreview) {
+            showChildOptions(index);
+        } else {
+            hideChildOptions();
+        }
     });
 
     // Mark as existing
     nodeExists[index] = true;
 
-    console.log(`Created ${position} node at index ${index}`);
+    console.log(`Created ${position} node at index ${index} in level ${childLevel}`);
 }
 
 function hideChildOptions() {
     // Remove all preview nodes
     const previewNodes = document.querySelectorAll('.tree-node.preview');
     previewNodes.forEach(node => node.remove());
-
     showingPreview = false;
 }
 
-
 inputField.addEventListener('input', function() {
     const inputValue = inputField.value.trim();
-
     if (inputValue) {
-        // Parse the input into numbers
         const numbers = inputValue.split(',').map(num => num.trim()).filter(num => num !== '');
-
-        // Fill all existing nodes with numbers
         populateTreeWithNumbers(numbers);
     } else {
-        // Clear all nodes if input is empty
         clearAllNodes();
     }
 });
 
 function populateTreeWithNumbers(numbers) {
-    // Go through all possible node positions
     for (let i = 0; i < nodeExists.length; i++) {
-        if (nodeExists[i] || i === 0) { // Include root (index 0) even if not marked as existing
+        if (nodeExists[i] || i === 0) {
             const nodeElement = document.getElementById(`node-${i}`);
             if (nodeElement && numbers[i] !== undefined) {
                 nodeElement.textContent = numbers[i];
             } else if (nodeElement) {
-                nodeElement.textContent = ''; // Clear if no number available
+                nodeElement.textContent = '';
             }
         }
     }
 }
 
 function clearAllNodes() {
-    // Clear text from all existing nodes
     for (let i = 0; i < nodeExists.length; i++) {
         if (nodeExists[i] || i === 0) {
             const nodeElement = document.getElementById(`node-${i}`);
