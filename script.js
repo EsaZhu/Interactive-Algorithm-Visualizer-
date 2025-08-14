@@ -2,6 +2,37 @@
 let nodeExists = new Array(15).fill(false); // Index 0 = root, etc.
 let showingPreview = false;
 
+//dynamic expanding
+function expandArrayIfNeeded(requiredIndex) {
+    if (requiredIndex >= nodeExists.length) {
+        // Double the array size or expand to accommodate the required index
+        const newSize = Math.max(nodeExists.length * 2, requiredIndex + 10);
+        const oldLength = nodeExists.length;
+
+        nodeExists.length = newSize;
+        // Fill new positions with false
+        for (let i = oldLength; i < newSize; i++) {
+            nodeExists[i] = false;
+        }
+
+        console.log(`Expanded array from ${oldLength} to ${newSize} nodes`);
+    }
+}
+
+function updateContainerHeight() {
+    const maxLevel = Math.max(...nodeExists.map((exists, index) =>
+        exists || index === 0 ? getNodeLevel(index) : -1
+    ));
+
+    const requiredHeight = (maxLevel + 1) * TREE_CONFIG.levelHeight + 100; // Extra padding
+    const container = document.querySelector('.tree-container');
+
+    if (requiredHeight > container.offsetHeight) {
+        container.style.height = requiredHeight + 'px';
+    }
+}
+
+
 // Helper function to calculate node level
 function getNodeLevel(index) {
     if (index === 0) return 0; // Root is level 0
@@ -21,6 +52,67 @@ function getNodesOnLevel(level) {
     return { startIndex, endIndex };
 }
 
+// Configuration for tree layout
+const TREE_CONFIG = {
+    nodeWidth: 60,
+    nodeHeight: 60,
+    levelHeight: 100,
+    baseSpacing: 200,
+    minSpacing: 80, // Minimum space between nodes
+    containerPadding: 50 // Padding from container edges
+};
+
+
+
+// Calculate spacing that prevents collisions
+function calculateOptimalSpacing(level, containerWidth) {
+    const nodesOnLevel = Math.pow(2, level);
+
+    if (level === 0) return 0; // Root has no siblings
+
+    // Calculate maximum possible spacing
+    const availableWidth = containerWidth - (2 * TREE_CONFIG.containerPadding);
+    const maxSpacing = (availableWidth - (nodesOnLevel * TREE_CONFIG.nodeWidth)) / (nodesOnLevel - 1);
+
+    // Use base spacing divided by level, but not less than minimum
+    const idealSpacing = TREE_CONFIG.baseSpacing / Math.pow(2, level - 1);
+
+    // Return the smaller of ideal or maximum possible, but at least minimum
+    return Math.max(TREE_CONFIG.minSpacing, Math.min(idealSpacing, maxSpacing));
+}
+
+
+
+// Calculate the X position for a node based on its parent
+function calculateNodeX(nodeIndex, containerWidth) {
+    if (nodeIndex === 0) {
+        // Root node - center it
+        return (containerWidth - TREE_CONFIG.nodeWidth) / 2;
+    }
+
+    const parentIndex = getParentIndex(nodeIndex);
+    const parentX = calculateNodeX(parentIndex, containerWidth);
+
+    // Determine if this is left or right child
+    const isLeftChild = (nodeIndex % 2 === 1);
+    const level = getNodeLevel(nodeIndex);
+
+    // Use optimal spacing for this level
+    const horizontalOffset = calculateOptimalSpacing(level, containerWidth);
+
+    if (isLeftChild) {
+        return Math.max(TREE_CONFIG.containerPadding, parentX - horizontalOffset);
+    } else {
+        return Math.min(containerWidth - TREE_CONFIG.nodeWidth - TREE_CONFIG.containerPadding, parentX + horizontalOffset);
+    }
+}
+
+// Calculate the Y position for a node
+function calculateNodeY(nodeIndex) {
+    const level = getNodeLevel(nodeIndex);
+    return level * TREE_CONFIG.levelHeight;
+}
+
 const inputField = document.querySelector('input[type="text"]');
 const rootNode = document.getElementById('node-0');
 
@@ -34,79 +126,84 @@ rootNode.addEventListener('click', function(e) {
     }
 });
 
+// Function to rearrange all existing nodes when tree grows
+function rearrangeAllNodes() {
+    const containerWidth = document.querySelector('.tree-container').offsetWidth;
+
+    // Get all existing nodes
+    for (let i = 0; i < nodeExists.length; i++) {
+        if (nodeExists[i] || i === 0) {
+            const nodeElement = document.getElementById(`node-${i}`);
+            if (nodeElement) {
+                const x = calculateNodeX(i, containerWidth);
+                const y = calculateNodeY(i);
+
+                // Animate the movement (optional)
+                nodeElement.style.transition = 'left 0.3s ease-in-out';
+                nodeElement.style.left = x + 'px';
+                nodeElement.style.top = y + 'px';
+            }
+        }
+    }
+
+    // Remove transition after animation
+    setTimeout(() => {
+        document.querySelectorAll('.tree-node').forEach(node => {
+            node.style.transition = '';
+        });
+    }, 300);
+}
+
 function showChildOptions(parentIndex) {
     const leftChildIndex = (parentIndex * 2) + 1;
     const rightChildIndex = (parentIndex * 2) + 2;
 
-    // Check if we're exceeding our array bounds
-    if (leftChildIndex >= nodeExists.length) {
-        console.log("Tree is at maximum size");
-        return;
-    }
+    // Expand array if needed
+    expandArrayIfNeeded(rightChildIndex);
 
-    const childLevel = getNodeLevel(leftChildIndex);
-
-    // Create or get the level element
-    let levelElement = document.getElementById(`level-${childLevel}`);
-    if (!levelElement) {
-        levelElement = document.createElement('div');
-        levelElement.className = 'tree-level';
-        levelElement.id = `level-${childLevel}`;
-
-        // Insert in correct order (levels should be in order)
-        const container = document.querySelector('.tree-container');
-        const existingLevels = container.querySelectorAll('.tree-level');
-        let inserted = false;
-
-        existingLevels.forEach(level => {
-            const levelNum = parseInt(level.id.split('-')[1]);
-            if (childLevel < levelNum && !inserted) {
-                container.insertBefore(levelElement, level);
-                inserted = true;
-            }
-        });
-
-        if (!inserted) {
-            container.appendChild(levelElement);
-        }
-    }
-
-    // Add preview nodes
+    // Add preview nodes directly
     if (!nodeExists[leftChildIndex]) {
-        createPreviewNode(leftChildIndex, levelElement, 'left');
+        createPreviewNode(leftChildIndex, null, 'left');
     }
 
-    if (rightChildIndex < nodeExists.length && !nodeExists[rightChildIndex]) {
-        createPreviewNode(rightChildIndex, levelElement, 'right');
+    if (!nodeExists[rightChildIndex]) {
+        createPreviewNode(rightChildIndex, null, 'right');
     }
 
     showingPreview = true;
 }
 
+
+
 function createPreviewNode(index, parentLevel, position) {
     const previewNode = document.createElement('div');
     previewNode.className = 'tree-node preview';
     previewNode.id = `preview-${index}`;
-    previewNode.setAttribute('data-position', position); // Help identify left vs right
+    previewNode.setAttribute('data-position', position);
+
+    // Calculate position based on parent
+    const containerWidth = document.querySelector('.tree-container').offsetWidth;
+    const x = calculateNodeX(index, containerWidth);
+    const y = calculateNodeY(index);
+
+    previewNode.style.left = x + 'px';
+    previewNode.style.top = y + 'px';
+
+    // Add to tree container (not to level)
+    document.querySelector('.tree-container').appendChild(previewNode);
 
     // Add click event to create actual node
     previewNode.addEventListener('click', function(e) {
-        e.stopPropagation(); // Prevent event bubbling
+        e.stopPropagation();
         createActualNode(index, position);
     });
-
-    parentLevel.appendChild(previewNode);
 }
 
 function createActualNode(index, position) {
-    // Find the preview node
+    // Find and remove the preview node
     const previewNode = document.getElementById(`preview-${index}`);
-    const childLevel = getNodeLevel(index);
-    const levelElement = document.getElementById(`level-${childLevel}`);
-
-    if (!levelElement) {
-        console.error(`Level element level-${childLevel} not found`);
-        return;
+    if (previewNode) {
+        previewNode.remove();
     }
 
     // Create actual node
@@ -115,43 +212,16 @@ function createActualNode(index, position) {
     actualNode.id = `node-${index}`;
     actualNode.setAttribute('data-position', position);
 
-    // Insert actual node in the correct position
-    if (previewNode && previewNode.parentNode === levelElement) {
-        // If preview node exists and is a child of the correct level, replace it
-        levelElement.insertBefore(actualNode, previewNode.nextSibling);
-        previewNode.remove(); // Remove the preview node after inserting actualNode
-    } else {
-        // If no preview node, position relative to parent node
-        const parentIndex = getParentIndex(index);
-        const parentNode = parentIndex !== null ? document.getElementById(`node-${parentIndex}`) : null;
+    // Calculate position based on parent
+    const containerWidth = document.querySelector('.tree-container').offsetWidth;
+    const x = calculateNodeX(index, containerWidth);
+    const y = calculateNodeY(index);
 
-        if (parentNode && levelElement) {
-            // Find all nodes in the current level
-            const siblingNodes = Array.from(levelElement.querySelectorAll('.tree-node:not(.preview)'))
-                .filter(node => node.id.startsWith('node-'))
-                .map(node => parseInt(node.id.split('-')[1]));
+    actualNode.style.left = x + 'px';
+    actualNode.style.top = y + 'px';
 
-            // Determine insertion point
-            const leftChildIndex = parentIndex * 2 + 1;
-            const rightChildIndex = parentIndex * 2 + 2;
-
-            if (position === 'left') {
-                // Insert as first child of parent (before right child if it exists)
-                const rightChildNode = rightChildIndex < nodeExists.length ? document.getElementById(`node-${rightChildIndex}`) : null;
-                if (rightChildNode) {
-                    levelElement.insertBefore(actualNode, rightChildNode);
-                } else {
-                    levelElement.appendChild(actualNode);
-                }
-            } else {
-                // Insert as last child of parent
-                levelElement.appendChild(actualNode);
-            }
-        } else {
-            // Fallback: append to level
-            levelElement.appendChild(actualNode);
-        }
-    }
+    // Add to tree container (not to level)
+    document.querySelector('.tree-container').appendChild(actualNode);
 
     // Add click event to actual node
     actualNode.addEventListener('click', function(e) {
@@ -167,7 +237,16 @@ function createActualNode(index, position) {
     // Mark as existing
     nodeExists[index] = true;
 
-    console.log(`Created ${position} node at index ${index} in level ${childLevel}`);
+    console.log(`Created ${position} node at index ${index}`);
+
+    // Update container height if needed
+    updateContainerHeight();
+
+    // Rearrange all nodes to prevent collisions
+    rearrangeAllNodes();
+
+    // Hide all preview nodes after creating actual node
+    hideChildOptions();
 }
 
 function hideChildOptions() {
@@ -210,3 +289,28 @@ function clearAllNodes() {
         }
     }
 }
+
+
+// Position root node when page loads
+window.addEventListener('load', function() {
+    const rootNode = document.getElementById('node-0');
+    const containerWidth = document.querySelector('.tree-container').offsetWidth;
+
+    const x = calculateNodeX(0, containerWidth);
+    const y = calculateNodeY(0);
+
+    rootNode.style.left = x + 'px';
+    rootNode.style.top = y + 'px';
+    rootNode.style.position = 'absolute';
+
+    nodeExists[0] = true;
+});
+
+// Handle window resize
+let resizeTimeout;
+window.addEventListener('resize', function() {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+        rearrangeAllNodes();
+    }, 250); // Debounce resize events
+});
