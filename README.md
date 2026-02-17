@@ -1,2 +1,2 @@
 # Interactive-Algorithm-Visualizer-
-Heap Sort Tree Visualizer
+This project is a interactive binary tree visualizer that uses vanilla JS, HTML, and CSS to dynamically render node hierarchies for up to 100 nodes with real-time input parsing and level-order traversal population. It has a collision detection and automatic node repositioning algorithms to prevent overlapping in a scalable tree structure supporting unlimited depth, reducing rendering errors. 
