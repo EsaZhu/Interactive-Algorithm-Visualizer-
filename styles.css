@@ -1,63 +1,136 @@
-/*style settings of the entire page*/
+/* General Reset */
+* {
+    box-sizing: border-box;
+}
+
 body {
-    background-color:white;
-    font-family: Arial, sans-serif;
+    background-color: white;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     margin: 0;
     padding: 20px;
+    color: #333;
 }
-/*Buttons section at the top of the page*/
-.input-section{
+
+/* Input Section */
+.input-section {
     display: flex;
     align-items: center;
     gap: 10px;
-
+    flex-wrap: wrap;
 }
 
-.helper-text{
+input[type="text"] {
+    padding: 10px 15px;
+    border: 2px solid #ddd;
+    border-radius: 5px;
+    font-size: 16px;
+    width: 300px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+input[type="text"]:focus {
+    border-color: #3CC;
+}
+
+.heap-btn {
+    padding: 10px 20px;
+    background-color: #eee;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 14px;
+    transition: background-color 0.2s, transform 0.1s;
+}
+
+.heap-btn:hover {
+    background-color: #3CC;
+    color: white;
+}
+
+.heap-btn:active {
+    transform: scale(0.98);
+}
+
+.heap-btn.active {
+    background-color: #008080; /* Darker Teal */
+    color: white;
+}
+
+.helper-text {
     margin-top: 10px;
     margin-bottom: 20px;
     font-size: 13px;
-    color: #666;
+    color: #888;
+    line-height: 1.5;
 }
 
-/*Tree*/
-.tree-container{
-    margin-top: 50px;
+/* Tree Container */
+.tree-container {
+    margin-top: 20px;
     position: relative;
     width: 100%;
-    height: 600px;
+    min-height: 600px;
+    /* Ensure container allows scrolling if tree is too wide/tall */
+    overflow: auto;
+    border: 1px solid #f0f0f0;
+    border-radius: 8px;
+    background: #fafafa;
 }
 
-/*Tree nodes*/
-.tree-node{
-    background-color: lightgrey;
-    width: 70px;
-    height: 70px;
+/* SVG Layer */
+#tree-svg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1; /* Behind nodes */
+    pointer-events: none; /* Let clicks pass through to nodes */
+}
+
+/* SVG Line Styling */
+line {
+    stroke: #333;
+    stroke-width: 2;
+}
+
+/* Tree Node */
+.tree-node {
+    background-color: #e0e0e0;
+    width: 60px;
+    height: 60px;
     border-radius: 50%;
     display: flex;
     justify-content: center;
     align-items: center;
     cursor: pointer;
     font-weight: bold;
+    font-size: 18px;
     position: absolute;
-    border: 2px solid transparent;
-    transition: border-color 0.3s ease;
+    z-index: 2; /* Above SVG */
+    border: 3px solid white;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    transition: left 0.5s ease-in-out, top 0.5s ease-in-out, background-color 0.3s, transform 0.2s;
 }
 
-.tree-level{
-    position: relative;
-    justify-content: center;
-    gap: 80px; /*Horizontal space between same level nodes*/
-    margin: 40px 0; /*Vertical space between nodes*/
+.tree-node:hover {
+    border-color: #3CC;
+    transform: scale(1.1);
+    z-index: 10;
 }
 
-/*Preview Nodes (dotted circles)*/
-.tree-node.preview{
-    background-color: white;
-    border: 2px dotted #ccc;
-    cursor: pointer;
+/* Inline Edit Input inside Node */
+.node-input {
+    width: 80%;
+    background: transparent;
+    border: none;
+    text-align: center;
+    font-weight: bold;
+    font-size: 18px;
+    color: #333;
+    outline: none;
+    padding: 0;
+    margin: 0;
 }
-
-.tree-node:hover{
-     border-color: #3CC;
- }

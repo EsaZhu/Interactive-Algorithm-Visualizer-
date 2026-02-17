@@ -1,316 +1,278 @@
-// Track tree state
-let nodeExists = new Array(15).fill(false); // Index 0 = root, etc.
-let showingPreview = false;
-
-//dynamic expanding
-function expandArrayIfNeeded(requiredIndex) {
-    if (requiredIndex >= nodeExists.length) {
-        // Double the array size or expand to accommodate the required index
-        const newSize = Math.max(nodeExists.length * 2, requiredIndex + 10);
-        const oldLength = nodeExists.length;
-
-        nodeExists.length = newSize;
-        // Fill new positions with false
-        for (let i = oldLength; i < newSize; i++) {
-            nodeExists[i] = false;
-        }
-
-        console.log(`Expanded array from ${oldLength} to ${newSize} nodes`);
-    }
-}
-
-function updateContainerHeight() {
-    const maxLevel = Math.max(...nodeExists.map((exists, index) =>
-        exists || index === 0 ? getNodeLevel(index) : -1
-    ));
-
-    const requiredHeight = (maxLevel + 1) * TREE_CONFIG.levelHeight + 100; // Extra padding
-    const container = document.querySelector('.tree-container');
-
-    if (requiredHeight > container.offsetHeight) {
-        container.style.height = requiredHeight + 'px';
-    }
-}
-
-
-// Helper function to calculate node level
-function getNodeLevel(index) {
-    if (index === 0) return 0; // Root is level 0
-    return Math.floor(Math.log2(index + 1));
-}
-
-// Helper function to get parent index
-function getParentIndex(index) {
-    if (index === 0) return null; // Root has no parent
-    return Math.floor((index - 1) / 2);
-}
-
-// Helper function to get all nodes on a level
-function getNodesOnLevel(level) {
-    const startIndex = Math.pow(2, level) - 1;
-    const endIndex = Math.pow(2, level + 1) - 2;
-    return { startIndex, endIndex };
-}
-
-// Configuration for tree layout
-const TREE_CONFIG = {
-    nodeWidth: 60,
-    nodeHeight: 60,
-    levelHeight: 100,
-    baseSpacing: 200,
-    minSpacing: 80, // Minimum space between nodes
-    containerPadding: 50 // Padding from container edges
+// --- Configuration & State ---
+const CONFIG = {
+    nodeRadius: 30, // half of width
+    levelHeight: 80,
+    containerPadding: 40
 };
 
+// Global state
+let treeValues = []; // Stores the actual numbers (including nulls if we wanted sparse trees, but we stick to complete trees for heaps)
+let currentHeapMode = null; // 'min' | 'max' | null
 
+// --- DOM Elements ---
+const container = document.getElementById('tree-container');
+const svgLayer = document.getElementById('tree-svg');
+const inputField = document.getElementById('array-input');
+const minHeapBtn = document.getElementById('min-heap-btn');
+const maxHeapBtn = document.getElementById('max-heap-btn');
 
-// Calculate spacing that prevents collisions
-function calculateOptimalSpacing(level, containerWidth) {
-    const nodesOnLevel = Math.pow(2, level);
+// --- Initialization ---
+window.addEventListener('resize', debounce(() => {
+    renderTree(false); // Re-render without re-reading input to keep edit state
+}, 300));
 
-    if (level === 0) return 0; // Root has no siblings
-
-    // Calculate maximum possible spacing
-    const availableWidth = containerWidth - (2 * TREE_CONFIG.containerPadding);
-    const maxSpacing = (availableWidth - (nodesOnLevel * TREE_CONFIG.nodeWidth)) / (nodesOnLevel - 1);
-
-    // Use base spacing divided by level, but not less than minimum
-    const idealSpacing = TREE_CONFIG.baseSpacing / Math.pow(2, level - 1);
-
-    // Return the smaller of ideal or maximum possible, but at least minimum
-    return Math.max(TREE_CONFIG.minSpacing, Math.min(idealSpacing, maxSpacing));
-}
-
-
-
-// Calculate the X position for a node based on its parent
-function calculateNodeX(nodeIndex, containerWidth) {
-    if (nodeIndex === 0) {
-        // Root node - center it
-        return (containerWidth - TREE_CONFIG.nodeWidth) / 2;
-    }
-
-    const parentIndex = getParentIndex(nodeIndex);
-    const parentX = calculateNodeX(parentIndex, containerWidth);
-
-    // Determine if this is left or right child
-    const isLeftChild = (nodeIndex % 2 === 1);
-    const level = getNodeLevel(nodeIndex);
-
-    // Use optimal spacing for this level
-    const horizontalOffset = calculateOptimalSpacing(level, containerWidth);
-
-    if (isLeftChild) {
-        return Math.max(TREE_CONFIG.containerPadding, parentX - horizontalOffset);
-    } else {
-        return Math.min(containerWidth - TREE_CONFIG.nodeWidth - TREE_CONFIG.containerPadding, parentX + horizontalOffset);
-    }
-}
-
-// Calculate the Y position for a node
-function calculateNodeY(nodeIndex) {
-    const level = getNodeLevel(nodeIndex);
-    return level * TREE_CONFIG.levelHeight;
-}
-
-const inputField = document.querySelector('input[type="text"]');
-const rootNode = document.getElementById('node-0');
-
-rootNode.addEventListener('click', function(e) {
-    e.stopPropagation();
-    console.log('Root node clicked!');
-    if (!showingPreview) {
-        showChildOptions(0);
-    } else {
-        hideChildOptions();
-    }
+inputField.addEventListener('input', (e) => {
+    parseInputAndRender(e.target.value);
 });
 
-// Function to rearrange all existing nodes when tree grows
-function rearrangeAllNodes() {
-    const containerWidth = document.querySelector('.tree-container').offsetWidth;
+minHeapBtn.addEventListener('click', () => {
+    setHeapMode('min');
+});
 
-    // Get all existing nodes
-    for (let i = 0; i < nodeExists.length; i++) {
-        if (nodeExists[i] || i === 0) {
-            const nodeElement = document.getElementById(`node-${i}`);
-            if (nodeElement) {
-                const x = calculateNodeX(i, containerWidth);
-                const y = calculateNodeY(i);
+maxHeapBtn.addEventListener('click', () => {
+    setHeapMode('max');
+});
 
-                // Animate the movement (optional)
-                nodeElement.style.transition = 'left 0.3s ease-in-out';
-                nodeElement.style.left = x + 'px';
-                nodeElement.style.top = y + 'px';
-            }
+// --- Core Logic ---
+
+function setHeapMode(mode) {
+    currentHeapMode = mode;
+
+    // UI Feedback
+    minHeapBtn.classList.toggle('active', mode === 'min');
+    maxHeapBtn.classList.toggle('active', mode === 'max');
+
+    // Perform Sort
+    if (treeValues.length > 0) {
+        buildHeap(mode);
+        renderTree(false); // Re-render, don't read from Input
+        updateInputField(); // Sync input box with sorted array
+    }
+}
+
+function parseInputAndRender(inputValue) {
+    currentHeapMode = null; // Reset heap mode on manual input typing
+    minHeapBtn.classList.remove('active');
+    maxHeapBtn.classList.remove('active');
+
+    const trimmed = inputValue.trim();
+    if (!trimmed) {
+        treeValues = [];
+    } else {
+        // Filter out non-numbers and empty strings
+        treeValues = trimmed.split(',')
+            .map(x => x.trim())
+            .filter(x => x !== '' && !isNaN(x))
+            .map(Number);
+
+        // Limit to 100 nodes for performance
+        if(treeValues.length > 100) treeValues.length = 100;
+    }
+    renderTree(false);
+}
+
+function updateInputField() {
+    inputField.value = treeValues.join(', ');
+}
+
+// --- Heap Algorithms ---
+
+function buildHeap(type) {
+    // Start from the last non-leaf node and heapify down
+    const startIdx = Math.floor(treeValues.length / 2) - 1;
+
+    for (let i = startIdx; i >= 0; i--) {
+        heapifyDown(i, treeValues.length, type);
+    }
+}
+
+function heapifyDown(index, size, type) {
+    let extreme = index;
+    const left = 2 * index + 1;
+    const right = 2 * index + 2;
+
+    // Compare with Left Child
+    if (left < size) {
+        if (type === 'min' && treeValues[left] < treeValues[extreme]) {
+            extreme = left;
+        } else if (type === 'max' && treeValues[left] > treeValues[extreme]) {
+            extreme = left;
         }
     }
 
-    // Remove transition after animation
-    setTimeout(() => {
-        document.querySelectorAll('.tree-node').forEach(node => {
-            node.style.transition = '';
-        });
-    }, 300);
-}
-
-function showChildOptions(parentIndex) {
-    const leftChildIndex = (parentIndex * 2) + 1;
-    const rightChildIndex = (parentIndex * 2) + 2;
-
-    // Expand array if needed
-    expandArrayIfNeeded(rightChildIndex);
-
-    // Add preview nodes directly
-    if (!nodeExists[leftChildIndex]) {
-        createPreviewNode(leftChildIndex, null, 'left');
+    // Compare with Right Child
+    if (right < size) {
+        if (type === 'min' && treeValues[right] < treeValues[extreme]) {
+            extreme = right;
+        } else if (type === 'max' && treeValues[right] > treeValues[extreme]) {
+            extreme = right;
+        }
     }
 
-    if (!nodeExists[rightChildIndex]) {
-        createPreviewNode(rightChildIndex, null, 'right');
+    // If swap needed
+    if (extreme !== index) {
+        [treeValues[index], treeValues[extreme]] = [treeValues[extreme], treeValues[index]];
+        heapifyDown(extreme, size, type);
     }
-
-    showingPreview = true;
 }
 
+// Used when value is updated via click
+function restoreHeapProperty() {
+    if (!currentHeapMode) return;
+    buildHeap(currentHeapMode);
+    renderTree(false);
+    updateInputField();
+}
 
+// --- Rendering Logic ---
 
-function createPreviewNode(index, parentLevel, position) {
-    const previewNode = document.createElement('div');
-    previewNode.className = 'tree-node preview';
-    previewNode.id = `preview-${index}`;
-    previewNode.setAttribute('data-position', position);
+function renderTree(readFromInput = true) {
+    // 1. cleanup
+    container.querySelectorAll('.tree-node').forEach(el => el.remove());
+    svgLayer.innerHTML = ''; // Clear arrows
 
-    // Calculate position based on parent
-    const containerWidth = document.querySelector('.tree-container').offsetWidth;
-    const x = calculateNodeX(index, containerWidth);
-    const y = calculateNodeY(index);
+    // Define marker for arrowheads
+    svgLayer.innerHTML = `
+        <defs>
+            <marker id="arrowhead" markerWidth="10" markerHeight="7"
+            refX="28" refY="3.5" orient="auto">
+                <polygon points="0 0, 10 3.5, 0 7" fill="#333" />
+            </marker>
+        </defs>
+    `;
 
-    previewNode.style.left = x + 'px';
-    previewNode.style.top = y + 'px';
+    if (treeValues.length === 0) return;
 
-    // Add to tree container (not to level)
-    document.querySelector('.tree-container').appendChild(previewNode);
+    // 2. Geometry calculations
+    const depth = Math.floor(Math.log2(treeValues.length));
+    const containerWidth = container.offsetWidth;
 
-    // Add click event to create actual node
-    previewNode.addEventListener('click', function(e) {
-        e.stopPropagation();
-        createActualNode(index, position);
+    // Ensure container is large enough for the deepest level
+    // Max nodes at deepest level = 2^depth
+    const requiredWidth = Math.pow(2, depth) * 70 + CONFIG.containerPadding * 2;
+
+    // Use the larger of the two widths
+    const effectiveWidth = Math.max(containerWidth, requiredWidth);
+
+    // Update container height dynamically
+    const requiredHeight = (depth + 1) * CONFIG.levelHeight + 100;
+    container.style.height = `${requiredHeight}px`;
+
+    // 3. Draw Nodes and Lines
+    treeValues.forEach((value, index) => {
+        const { x, y } = calculatePosition(index, effectiveWidth);
+
+        // Create Node
+        const nodeEl = document.createElement('div');
+        nodeEl.className = 'tree-node';
+        nodeEl.id = `node-${index}`;
+        nodeEl.style.left = `${x}px`;
+        nodeEl.style.top = `${y}px`;
+        nodeEl.textContent = value;
+
+        // Click to Edit
+        nodeEl.addEventListener('click', (e) => handleNodeClick(index, e));
+
+        container.appendChild(nodeEl);
+
+        // Draw connection to parent (if not root)
+        if (index > 0) {
+            const parentIndex = Math.floor((index - 1) / 2);
+            const parentPos = calculatePosition(parentIndex, effectiveWidth);
+            drawArrow(parentPos.x, parentPos.y, x, y);
+        }
     });
 }
 
-function createActualNode(index, position) {
-    // Find and remove the preview node
-    const previewNode = document.getElementById(`preview-${index}`);
-    if (previewNode) {
-        previewNode.remove();
-    }
+function calculatePosition(index, width) {
+    const level = Math.floor(Math.log2(index + 1));
+    const maxNodesInLevel = Math.pow(2, level);
+    const indexInLevel = index - (Math.pow(2, level) - 1);
 
-    // Create actual node
-    const actualNode = document.createElement('div');
-    actualNode.className = 'tree-node';
-    actualNode.id = `node-${index}`;
-    actualNode.setAttribute('data-position', position);
+    // Divide the width into equal slices for the current level
+    const partitionWidth = width / maxNodesInLevel;
 
-    // Calculate position based on parent
-    const containerWidth = document.querySelector('.tree-container').offsetWidth;
-    const x = calculateNodeX(index, containerWidth);
-    const y = calculateNodeY(index);
+    // Center the node within its partition
+    const x = (indexInLevel * partitionWidth) + (partitionWidth / 2) - CONFIG.nodeRadius;
+    const y = (level * CONFIG.levelHeight) + CONFIG.containerPadding;
 
-    actualNode.style.left = x + 'px';
-    actualNode.style.top = y + 'px';
+    return { x, y };
+}
 
-    // Add to tree container (not to level)
-    document.querySelector('.tree-container').appendChild(actualNode);
+function drawArrow(x1, y1, x2, y2) {
+    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
 
-    // Add click event to actual node
-    actualNode.addEventListener('click', function(e) {
-        e.stopPropagation();
-        console.log(`Node ${index} clicked!`);
-        if (!showingPreview) {
-            showChildOptions(index);
+    // Offset centers by radius so line starts/ends at center of node div
+    const offset = CONFIG.nodeRadius;
+
+    line.setAttribute("x1", x1 + offset);
+    line.setAttribute("y1", y1 + offset);
+    line.setAttribute("x2", x2 + offset);
+    line.setAttribute("y2", y2 + offset);
+    line.setAttribute("marker-end", "url(#arrowhead)");
+
+    svgLayer.appendChild(line);
+}
+
+// --- Interaction Logic ---
+
+function handleNodeClick(index, event) {
+    event.stopPropagation();
+    const nodeEl = document.getElementById(`node-${index}`);
+
+    // If already editing, do nothing
+    if (nodeEl.querySelector('input')) return;
+
+    const currentValue = treeValues[index];
+    nodeEl.textContent = '';
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = currentValue;
+    input.className = 'node-input';
+
+    // Auto-focus and select text
+    nodeEl.appendChild(input);
+    input.focus();
+    input.select();
+
+    // Confirm edit on Enter or Blur
+    const confirmEdit = () => {
+        const newValue = parseInt(input.value.trim());
+
+        if (!isNaN(newValue)) {
+            treeValues[index] = newValue;
+            updateInputField(); // Sync top input
+
+            if (currentHeapMode) {
+                // If in heap mode, re-sort immediately
+                restoreHeapProperty();
+            } else {
+                // Just update visual text
+                nodeEl.textContent = newValue;
+                // Re-render to be safe (remove input)
+                renderTree(false);
+            }
         } else {
-            hideChildOptions();
+            // Revert if invalid
+            nodeEl.textContent = currentValue;
+        }
+    };
+
+    input.addEventListener('blur', confirmEdit);
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            input.blur(); // Triggers blur event
         }
     });
-
-    // Mark as existing
-    nodeExists[index] = true;
-
-    console.log(`Created ${position} node at index ${index}`);
-
-    // Update container height if needed
-    updateContainerHeight();
-
-    // Rearrange all nodes to prevent collisions
-    rearrangeAllNodes();
-
-    // Hide all preview nodes after creating actual node
-    hideChildOptions();
 }
 
-function hideChildOptions() {
-    // Remove all preview nodes
-    const previewNodes = document.querySelectorAll('.tree-node.preview');
-    previewNodes.forEach(node => node.remove());
-    showingPreview = false;
+// --- Utilities ---
+
+function debounce(func, wait) {
+    let timeout;
+    return function(...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+    };
 }
-
-inputField.addEventListener('input', function() {
-    const inputValue = inputField.value.trim();
-    if (inputValue) {
-        const numbers = inputValue.split(',').map(num => num.trim()).filter(num => num !== '');
-        populateTreeWithNumbers(numbers);
-    } else {
-        clearAllNodes();
-    }
-});
-
-function populateTreeWithNumbers(numbers) {
-    for (let i = 0; i < nodeExists.length; i++) {
-        if (nodeExists[i] || i === 0) {
-            const nodeElement = document.getElementById(`node-${i}`);
-            if (nodeElement && numbers[i] !== undefined) {
-                nodeElement.textContent = numbers[i];
-            } else if (nodeElement) {
-                nodeElement.textContent = '';
-            }
-        }
-    }
-}
-
-function clearAllNodes() {
-    for (let i = 0; i < nodeExists.length; i++) {
-        if (nodeExists[i] || i === 0) {
-            const nodeElement = document.getElementById(`node-${i}`);
-            if (nodeElement) {
-                nodeElement.textContent = '';
-            }
-        }
-    }
-}
-
-
-// Position root node when page loads
-window.addEventListener('load', function() {
-    const rootNode = document.getElementById('node-0');
-    const containerWidth = document.querySelector('.tree-container').offsetWidth;
-
-    const x = calculateNodeX(0, containerWidth);
-    const y = calculateNodeY(0);
-
-    rootNode.style.left = x + 'px';
-    rootNode.style.top = y + 'px';
-    rootNode.style.position = 'absolute';
-
-    nodeExists[0] = true;
-});
-
-// Handle window resize
-let resizeTimeout;
-window.addEventListener('resize', function() {
-    clearTimeout(resizeTimeout);
-    resizeTimeout = setTimeout(() => {
-        rearrangeAllNodes();
-    }, 250); // Debounce resize events
-});

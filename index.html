@@ -9,27 +9,24 @@
 <body>
 <!-- Input Section -->
 <div class="input-section">
-    <!-- Your input field and buttons go here -->
     <label>
-        <input type="text" placeholder="Enter an array of numbers*">
+        <input type="text" id="array-input" placeholder="Enter numbers (e.g. 10, 20, 5, 12)">
     </label>
-
-    <button class="heap-btn">MIN HEAP sort</button>
-    <button class="heap-btn">MAX HEAP sort</button>
+    <button id="min-heap-btn" class="heap-btn">MIN HEAP Sort</button>
+    <button id="max-heap-btn" class="heap-btn">MAX HEAP Sort</button>
 </div>
 
 <div class="helper-text">
-    *Separate the values with<br>
-    commas. BFS Traversal.<br>
-    e.g. 1, 2, 3, 4
+    *Enter comma-separated numbers to build the tree in BFS order.<br>
+    *Click any node to edit its value.<br>
+    *Select a Heap Mode to auto-sort changes.
 </div>
+
 <!-- Tree Container -->
-<div class="tree-container">
-    <!-- Level 0: Root -->
-    <div class="tree-level" id="level-0">
-        <div class="tree-node" id="node-0"></div>
-    </div>
-    <!-- Level 1: Will be added dynamically -->
+<div class="tree-container" id="tree-container">
+    <!-- SVG Layer for Arrows (sits behind nodes) -->
+    <svg id="tree-svg"></svg>
+    <!-- Nodes will be injected here via JS -->
 </div>
 
 <script src="script.js"></script>
